@@ -9,30 +9,55 @@ load_dotenv()
 _pool = None
 
 
-def obtener_pool() -> MySQLConnectionPool:
+def obtener_pool():
     """Crea el pool de conexiones una sola vez y lo reutiliza."""
     global _pool
     if _pool is None:
-        _pool = MySQLConnectionPool(
-            pool_name="maxlimp_pool",
-            pool_size=5,
-            pool_reset_session=True,
+        try:
+            _pool = MySQLConnectionPool(
+                pool_name="maxlimp_pool",
+                pool_size=10,
+                pool_reset_session=True,
+                host=os.getenv("DB_HOST"),
+                port=int(os.getenv("DB_PORT", 3306)),
+                user=os.getenv("DB_USER"),
+                password=os.getenv("DB_PASSWORD"),
+                database=os.getenv("DB_NAME"),
+                connection_timeout=15,
+            )
+        except Exception as e:
+            print(f"Aviso al inicializar pool de conexiones: {e}")
+            _pool = None
+    return _pool
+
+
+def obtener_conexion():
+    """
+    Devuelve una conexión activa. Intenta primero desde el pool reutilizable;
+    si el pool está agotado o ocupado, abre una conexión directa de respaldo
+    para garantizar que ninguna consulta falle.
+    """
+    try:
+        pool = obtener_pool()
+        if pool is not None:
+            conn = pool.get_connection()
+            if conn and conn.is_connected():
+                return conn
+    except Exception:
+        # Si el pool está saturado (PoolError) o no disponible, recurrimos a conexión directa
+        pass
+
+    try:
+        return mysql.connector.connect(
             host=os.getenv("DB_HOST"),
             port=int(os.getenv("DB_PORT", 3306)),
             user=os.getenv("DB_USER"),
             password=os.getenv("DB_PASSWORD"),
             database=os.getenv("DB_NAME"),
-            connection_timeout=10,
+            connection_timeout=15,
         )
-    return _pool
-
-
-def obtener_conexion() -> mysql.connector.MySQLConnection:
-    """Devuelve una conexión del pool. Mucho más rápido que abrir una nueva."""
-    try:
-        return obtener_pool().get_connection()
-    except mysql.connector.Error as e:
-        print(f"Error al obtener conexión del pool: {e}")
+    except Exception as e:
+        print(f"Error de conexión a la base de datos: {e}")
         return None
 
 
@@ -63,10 +88,16 @@ def inicializar_bd():
             id            INT AUTO_INCREMENT PRIMARY KEY,
             nombre        VARCHAR(255) NOT NULL,
             usuario       VARCHAR(255) NOT NULL UNIQUE,
-            password_hash VARCHAR(64)  NOT NULL,
+            password_hash VARCHAR(255) NOT NULL,
             rol           VARCHAR(50)  NOT NULL DEFAULT 'vendedor'
         )
     """)
+
+    # Asegura que password_hash soporte hashes PBKDF2 largos si la tabla ya existía
+    try:
+        cursor.execute("ALTER TABLE usuarios MODIFY COLUMN password_hash VARCHAR(255) NOT NULL")
+    except Exception:
+        pass
 
     # ── esquema oficial de Max Limp (idéntico al documento de contexto) ───
     cursor.execute("""
@@ -116,29 +147,57 @@ def inicializar_bd():
         )
     """)
 
-    # ── trigger de descuento automático de stock ──────────────────────────
-    # Se dispara tanto si el INSERT en detalle_pedido lo hace este panel
-    # como si lo hace el workflow de n8n al confirmar un pedido de WhatsApp.
-    cursor.execute("DROP TRIGGER IF EXISTS descontar_stock")
+    # ── triggers de stock (idempotentes: solo se crean si no existen) ──────
+    # 1. validar_stock_antes_de_insertar: impide sobreventas (incluso si n8n inserta directo)
+    # 2. descontar_stock: resta automáticamente el inventario tras cada INSERT
     cursor.execute("""
-        CREATE TRIGGER descontar_stock
-        AFTER INSERT ON detalle_pedido
-        FOR EACH ROW
-        BEGIN
-            UPDATE productos
-            SET stock = stock - NEW.cantidad
-            WHERE id = NEW.producto_id;
-        END
+        SELECT trigger_name FROM information_schema.triggers
+        WHERE trigger_schema = DATABASE()
     """)
+    triggers_activos = {r[0].lower() for r in cursor.fetchall()}
+
+    if "validar_stock_antes_de_insertar" not in triggers_activos:
+        try:
+            cursor.execute("""
+                CREATE TRIGGER validar_stock_antes_de_insertar
+                BEFORE INSERT ON detalle_pedido
+                FOR EACH ROW
+                BEGIN
+                    DECLARE stock_disp INT DEFAULT 0;
+                    SELECT stock INTO stock_disp FROM productos WHERE id = NEW.producto_id;
+                    IF stock_disp < NEW.cantidad THEN
+                        SIGNAL SQLSTATE '45000'
+                        SET MESSAGE_TEXT = 'Error: Stock insuficiente para procesar el pedido.';
+                    END IF;
+                END
+            """)
+        except Exception as e:
+            print(f"Aviso al crear trigger validar_stock_antes_de_insertar: {e}")
+
+    if "descontar_stock" not in triggers_activos:
+        try:
+            cursor.execute("""
+                CREATE TRIGGER descontar_stock
+                AFTER INSERT ON detalle_pedido
+                FOR EACH ROW
+                BEGIN
+                    UPDATE productos
+                    SET stock = stock - NEW.cantidad
+                    WHERE id = NEW.producto_id;
+                END
+            """)
+        except Exception as e:
+            print(f"Aviso al crear trigger descontar_stock: {e}")
 
     # ── usuarios de demo del panel ─────────────────────────────────────────
-    hash_admin = hashlib.sha256("admin123".encode()).hexdigest()
+    from cifrado import cifrar_contrasena
+    hash_admin = cifrar_contrasena("admin123")
     cursor.execute("""
         INSERT IGNORE INTO usuarios (nombre, usuario, password_hash, rol)
         VALUES ('Administrador', 'admin', %s, 'admin')
     """, (hash_admin,))
 
-    hash_vend = hashlib.sha256("vendedor123".encode()).hexdigest()
+    hash_vend = cifrar_contrasena("vendedor123")
     cursor.execute("""
         INSERT IGNORE INTO usuarios (nombre, usuario, password_hash, rol)
         VALUES ('Vendedor Demo', 'vendedor', %s, 'vendedor')

@@ -1,6 +1,7 @@
 from collections import deque
 from datetime import datetime
 from base_de_datos.connection import obtener_conexion
+from cifrado import cifrar_contrasena, verificar_contrasena, es_hash_legacy
 
 
 def _parse_fecha(texto: str):
@@ -24,22 +25,47 @@ def _fmt_fecha(f) -> str:
 
 # ── USUARIOS DEL PANEL (staff interno) ─────────────────────────────────────────
 
-def autenticar_usuario(usuario: str, password_hash: str):
-    """Retorna dict con id/nombre/rol o None si no coincide."""
+def autenticar_usuario(usuario: str, password_plano: str):
+    """
+    Verifica las credenciales del usuario.
+    Si el hash almacenado es legacy (SHA-256 plano), lo migra automáticamente
+    a PBKDF2 con salt en la base de datos tras verificar que es correcto.
+    """
     conn = obtener_conexion()
     if not conn:
         return None
     cursor = conn.cursor()
     cursor.execute(
-        "SELECT id, nombre, rol FROM usuarios WHERE usuario=%s AND password_hash=%s",
-        (usuario, password_hash)
+        "SELECT id, nombre, rol, password_hash FROM usuarios WHERE usuario=%s",
+        (usuario,)
     )
     fila = cursor.fetchone()
+    if not fila:
+        cursor.close()
+        conn.close()
+        return None
+
+    user_id, nombre, rol, hash_guardado = fila
+    if not verificar_contrasena(password_plano, hash_guardado):
+        cursor.close()
+        conn.close()
+        return None
+
+    # Si es hash legacy, actualizamos silenciosamente a PBKDF2 con salt
+    if es_hash_legacy(hash_guardado):
+        try:
+            nuevo_hash = cifrar_contrasena(password_plano)
+            cursor.execute(
+                "UPDATE usuarios SET password_hash=%s WHERE id=%s",
+                (nuevo_hash, user_id)
+            )
+            conn.commit()
+        except Exception:
+            pass  # no interrumpir el login si la migración del hash falla
+
     cursor.close()
     conn.close()
-    if fila:
-        return {"id": fila[0], "nombre": fila[1], "rol": fila[2]}
-    return None
+    return {"id": user_id, "nombre": nombre, "rol": rol}
 
 
 def listar_usuarios() -> deque:
@@ -58,13 +84,12 @@ def listar_usuarios() -> deque:
 
 
 def crear_usuario(nombre: str, usuario: str, contrasena: str, rol: str = "vendedor"):
-    import hashlib
     if not nombre.strip() or not usuario.strip() or not contrasena:
         raise ValueError("Todos los campos son obligatorios.")
     conn = obtener_conexion()
     if not conn:
         raise ConnectionError("Sin conexión a la base de datos.")
-    hash_pass = hashlib.sha256(contrasena.encode("utf-8")).hexdigest()
+    hash_pass = cifrar_contrasena(contrasena)
     try:
         cursor = conn.cursor()
         cursor.execute(
@@ -80,7 +105,6 @@ def crear_usuario(nombre: str, usuario: str, contrasena: str, rol: str = "vended
 
 
 def editar_usuario(usuario_id: int, nombre: str, usuario: str, rol: str, contrasena: str = None):
-    import hashlib
     if not nombre.strip() or not usuario.strip():
         raise ValueError("Nombre y usuario son obligatorios.")
     conn = obtener_conexion()
@@ -89,7 +113,7 @@ def editar_usuario(usuario_id: int, nombre: str, usuario: str, rol: str, contras
     try:
         cursor = conn.cursor()
         if contrasena:
-            hash_pass = hashlib.sha256(contrasena.encode("utf-8")).hexdigest()
+            hash_pass = cifrar_contrasena(contrasena)
             cursor.execute(
                 "UPDATE usuarios SET nombre=%s, usuario=%s, rol=%s, password_hash=%s WHERE id=%s",
                 (nombre.strip(), usuario.strip(), rol, hash_pass, usuario_id)

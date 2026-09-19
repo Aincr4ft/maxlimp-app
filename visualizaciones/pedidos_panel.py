@@ -163,7 +163,14 @@ class VentanaVendedor(ctk.CTk):
                       command=self._vaciar_carrito).pack(fill="x", padx=14, pady=(0, 8))
 
         self.lbl_msg = ctk.CTkLabel(panel_pedido, text="", font=FONT_SMALL, text_color=C_MUTED, wraplength=260)
-        self.lbl_msg.pack(padx=14, pady=(0, 12))
+        self.lbl_msg.pack(padx=14, pady=(0, 6))
+
+        self.ultimo_pedido_id = None
+        self.btn_ticket = ctk.CTkButton(panel_pedido, text="🧾 Ver / Imprimir Ticket", height=32,
+                                        fg_color=C_ACCENT, hover_color="#0d9668",
+                                        font=FONT_SMALL, corner_radius=8,
+                                        command=self._abrir_ticket_reciente)
+        # Se muestra únicamente cuando se completa un pedido
 
     # ── CLIENTE ───────────────────────────────────────────────────────────────
 
@@ -232,7 +239,9 @@ class VentanaVendedor(ctk.CTk):
 
     def _renderizar_catalogo(self, productos):
         self.lbl_cargando.configure(text="")
-        for w in list(self.frame_catalogo.winfo_children())[len(self.cols_cat):]:
+        # CTkScrollableFrame almacena los widgets reales en ._scrollable_frame
+        inner_cat = getattr(self.frame_catalogo, "_scrollable_frame", self.frame_catalogo)
+        for w in list(inner_cat.winfo_children())[len(self.cols_cat):]:
             w.destroy()
 
         if not productos:
@@ -271,7 +280,8 @@ class VentanaVendedor(ctk.CTk):
         self._refrescar_carrito()
 
     def _refrescar_carrito(self):
-        for w in self.frame_carrito.winfo_children():
+        inner_cart = getattr(self.frame_carrito, "_scrollable_frame", self.frame_carrito)
+        for w in inner_cart.winfo_children():
             w.destroy()
 
         total = 0.0
@@ -334,11 +344,17 @@ class VentanaVendedor(ctk.CTk):
     def _pedido_exitoso(self, resultado):
         n = len(resultado["items_ok"])
         total = resultado["total"]
+        self.ultimo_pedido_id = resultado["pedido_id"]
         self.carrito.clear()
         self._refrescar_carrito()
         self._cargar_catalogo()
         self.lbl_msg.configure(
-            text=f"✅ Pedido #{resultado['pedido_id']} OK: {n} producto(s) — ${total:,.2f}", text_color=C_GREEN)
+            text=f"✅ Pedido #{self.ultimo_pedido_id} OK: {n} producto(s) — ${total:,.2f}", text_color=C_GREEN)
+        self.btn_ticket.pack(fill="x", padx=14, pady=(0, 10))
+
+    def _abrir_ticket_reciente(self):
+        if self.ultimo_pedido_id:
+            mostrar_detalle_pedido(self, self.ultimo_pedido_id)
 
     # ── HISTORIAL ─────────────────────────────────────────────────────────────
 

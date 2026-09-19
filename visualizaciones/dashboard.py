@@ -1,4 +1,6 @@
+import csv
 import threading
+from tkinter import filedialog, messagebox
 import customtkinter as ctk
 from sesion import Sesion
 from base_de_datos.queries import (
@@ -217,6 +219,9 @@ class VentanaAdmin(ctk.CTk):
         ctk.CTkButton(acc, text="Ver todo", width=80, height=32, corner_radius=8,
                       fg_color=C_SURFACE, hover_color=C_BORDER, font=FONT_SMALL,
                       command=self._cargar_productos).pack(side="left", padx=4)
+        ctk.CTkButton(acc, text="📥 Exportar CSV", width=110, height=32, corner_radius=8,
+                      fg_color=C_SURFACE, hover_color=C_BORDER, font=FONT_SMALL,
+                      command=self._exportar_productos_csv).pack(side="left", padx=4)
 
         ctk.CTkButton(acc, text="➕ Nuevo", width=100, height=32, corner_radius=8,
                       fg_color=C_GREEN, hover_color="#0d9668", font=FONT_SMALL,
@@ -231,6 +236,12 @@ class VentanaAdmin(ctk.CTk):
                       fg_color=C_RED, hover_color="#b91c1c", font=FONT_SMALL,
                       command=self._eliminar_producto).pack(side="right", padx=4)
 
+        # Banner de stock crítico
+        self.banner_stock_prod = ctk.CTkFrame(self.tab_productos, fg_color="#3b1515", corner_radius=8,
+                                              border_width=1, border_color=C_RED)
+        self.lbl_banner_stock = ctk.CTkLabel(self.banner_stock_prod, text="", font=FONT_SMALL, text_color="#fca5a5")
+        self.lbl_banner_stock.pack(side="left", padx=12, pady=6)
+
         self.prod_lbl_cargando = ctk.CTkLabel(self.tab_productos, text="", text_color=C_MUTED, font=FONT_SMALL)
         self.prod_lbl_cargando.pack(anchor="w")
 
@@ -242,7 +253,11 @@ class VentanaAdmin(ctk.CTk):
         self._render_prod_encabezado()
 
     def _render_prod_encabezado(self):
-        for w in self.frame_prod_tabla.winfo_children():
+        # CTkScrollableFrame wraps widgets inside ._scrollable_frame internamente.
+        # winfo_children() en el frame externo sólo devuelve el canvas/scrollbar
+        # de la infraestructura de CTk, NO nuestras filas. Hay que limpiar el frame interno.
+        inner = getattr(self.frame_prod_tabla, "_scrollable_frame", self.frame_prod_tabla)
+        for w in inner.winfo_children():
             w.destroy()
         for col_i, (enc, ancho) in enumerate(self.cols_prod.items()):
             ctk.CTkLabel(self.frame_prod_tabla, text=enc, font=FONT_SMALL,
@@ -253,9 +268,10 @@ class VentanaAdmin(ctk.CTk):
         self._ocultar_tabs()
         self.tab_productos.pack(fill="both", expand=True)
         self._activar_tab("🧴  Productos")
+        self._cargar_productos()
 
     def _cargar_productos(self):
-        self.prod_lbl_cargando.configure(text="⏳ Cargando...")
+        self.prod_lbl_cargando.configure(text="⏳ Cargando productos...")
         threading.Thread(target=self._cargar_productos_bg, args=(None,), daemon=True).start()
 
     def _buscar_productos(self):
@@ -264,8 +280,13 @@ class VentanaAdmin(ctk.CTk):
         threading.Thread(target=self._cargar_productos_bg, args=(filtro,), daemon=True).start()
 
     def _cargar_productos_bg(self, filtro):
-        productos = listar_productos(filtro=filtro, solo_activos=False)
-        self.after(0, lambda: self._render_productos(productos))
+        try:
+            productos = listar_productos(filtro=filtro, solo_activos=False)
+            self.after(0, lambda: self._render_productos(productos))
+        except Exception as e:
+            self.after(0, lambda: self.prod_lbl_cargando.configure(
+                text=f"❌ Error al cargar productos: {e}", text_color=C_RED
+            ))
 
     def _render_productos(self, productos):
         self.prod_lbl_cargando.configure(text="")
@@ -432,6 +453,9 @@ class VentanaAdmin(ctk.CTk):
         ctk.CTkButton(acc, text="Ver todo", width=80, height=32, corner_radius=8,
                       fg_color=C_SURFACE, hover_color=C_BORDER, font=FONT_SMALL,
                       command=self._cargar_pedidos).pack(side="left", padx=4)
+        ctk.CTkButton(acc, text="📥 Exportar CSV", width=110, height=32, corner_radius=8,
+                      fg_color=C_SURFACE, hover_color=C_BORDER, font=FONT_SMALL,
+                      command=self._exportar_pedidos_csv).pack(side="left", padx=4)
         ctk.CTkButton(acc, text="Cambiar estado", width=120, height=32, corner_radius=8,
                       fg_color=C_ORANGE, hover_color="#d97706", font=FONT_SMALL,
                       command=self._cambiar_estado_ui).pack(side="right", padx=(4, 12))
@@ -448,7 +472,8 @@ class VentanaAdmin(ctk.CTk):
         self._render_ped_encabezado()
 
     def _render_ped_encabezado(self):
-        for w in self.frame_ped_tabla.winfo_children():
+        inner = getattr(self.frame_ped_tabla, "_scrollable_frame", self.frame_ped_tabla)
+        for w in inner.winfo_children():
             w.destroy()
         for col_i, (enc, ancho) in enumerate(self.cols_ped.items()):
             ctk.CTkLabel(self.frame_ped_tabla, text=enc, font=FONT_SMALL,
@@ -459,9 +484,10 @@ class VentanaAdmin(ctk.CTk):
         self._ocultar_tabs()
         self.tab_pedidos.pack(fill="both", expand=True)
         self._activar_tab("🧾  Pedidos")
+        self._cargar_pedidos()
 
     def _cargar_pedidos(self):
-        self.ped_lbl_cargando.configure(text="⏳ Cargando...")
+        self.ped_lbl_cargando.configure(text="⏳ Cargando pedidos...")
         threading.Thread(target=self._cargar_pedidos_bg, args=(None, None), daemon=True).start()
 
     def _buscar_pedidos(self):
@@ -472,8 +498,13 @@ class VentanaAdmin(ctk.CTk):
         threading.Thread(target=self._cargar_pedidos_bg, args=(filtro, estado), daemon=True).start()
 
     def _cargar_pedidos_bg(self, filtro, estado):
-        pedidos = listar_pedidos(filtro_cliente=filtro, estado=estado)
-        self.after(0, lambda: self._render_pedidos(pedidos))
+        try:
+            pedidos = listar_pedidos(filtro_cliente=filtro, estado=estado)
+            self.after(0, lambda: self._render_pedidos(pedidos))
+        except Exception as e:
+            self.after(0, lambda: self.ped_lbl_cargando.configure(
+                text=f"❌ Error al cargar pedidos: {e}", text_color=C_RED
+            ))
 
     def _render_pedidos(self, pedidos):
         self.ped_lbl_cargando.configure(text="")
@@ -559,7 +590,8 @@ class VentanaAdmin(ctk.CTk):
         self._render_cli_encabezado()
 
     def _render_cli_encabezado(self):
-        for w in self.frame_cli_tabla.winfo_children():
+        inner = getattr(self.frame_cli_tabla, "_scrollable_frame", self.frame_cli_tabla)
+        for w in inner.winfo_children():
             w.destroy()
         for col_i, (enc, ancho) in enumerate(self.cols_cli.items()):
             ctk.CTkLabel(self.frame_cli_tabla, text=enc, font=FONT_SMALL,
@@ -626,7 +658,8 @@ class VentanaAdmin(ctk.CTk):
         self._render_usr_encabezado()
 
     def _render_usr_encabezado(self):
-        for w in self.frame_usr_tabla.winfo_children():
+        inner = getattr(self.frame_usr_tabla, "_scrollable_frame", self.frame_usr_tabla)
+        for w in inner.winfo_children():
             w.destroy()
         for col_i, (enc, ancho) in enumerate(self.cols_usr.items()):
             ctk.CTkLabel(self.frame_usr_tabla, text=enc, font=FONT_SMALL,
@@ -763,6 +796,96 @@ class VentanaAdmin(ctk.CTk):
         self.metricas_labels["Productos"].configure(text=str(r["productos"]))
         self.metricas_labels["Clientes"].configure(text=str(r["clientes"]))
         self.metricas_labels["Bajo stock"].configure(text=str(r["bajo_stock"]))
+
+        # Alerta visual en pestaña de productos si hay bajo stock
+        if hasattr(self, "banner_stock_prod"):
+            if r["bajo_stock"] > 0:
+                self.lbl_banner_stock.configure(
+                    text=f"⚠️  Atención: Hay {r['bajo_stock']} producto(s) con stock crítico (< 5 unidades)."
+                )
+                self.banner_stock_prod.pack(fill="x", pady=(0, 6), before=self.prod_lbl_cargando)
+            else:
+                self.banner_stock_prod.pack_forget()
+
+    # ── EXPORTACIÓN CSV ───────────────────────────────────────────────────────
+
+    def _exportar_productos_csv(self):
+        ruta = filedialog.asksaveasfilename(
+            parent=self,
+            title="Exportar Catálogo de Productos",
+            defaultextension=".csv",
+            initialfile="productos_maxlimp.csv",
+            filetypes=[("Archivos CSV", "*.csv"), ("Todos los archivos", "*.*")]
+        )
+        if not ruta:
+            return
+
+        def _bg():
+            try:
+                productos = listar_productos(solo_activos=False)
+                with open(ruta, "w", newline="", encoding="utf-8-sig") as f:
+                    writer = csv.writer(f)
+                    writer.writerow(["ID", "Nombre", "Categoría", "Descripción", "Precio", "Stock", "Activo"])
+                    for p in productos:
+                        writer.writerow([
+                            p["id"],
+                            p["nombre"],
+                            p["categoria"],
+                            p["descripcion"],
+                            f"{p['precio']:.2f}",
+                            p["stock"],
+                            "Sí" if p["activo"] else "No",
+                        ])
+                self.after(0, lambda: messagebox.showinfo(
+                    "Exportación Exitosa", f"Se exportaron {len(productos)} productos a:\n{ruta}"
+                ))
+            except Exception as e:
+                self.after(0, lambda: messagebox.showerror(
+                    "Error de Exportación", f"No se pudo exportar el catálogo: {e}"
+                ))
+
+        threading.Thread(target=_bg, daemon=True).start()
+
+    def _exportar_pedidos_csv(self):
+        ruta = filedialog.asksaveasfilename(
+            parent=self,
+            title="Exportar Historial de Pedidos",
+            defaultextension=".csv",
+            initialfile="pedidos_maxlimp.csv",
+            filetypes=[("Archivos CSV", "*.csv"), ("Todos los archivos", "*.*")]
+        )
+        if not ruta:
+            return
+
+        filtro = self.ped_entry_cliente.get().strip() or None
+        estado = self.ped_estado_var.get()
+        estado = None if estado == "Todos" else estado
+
+        def _bg():
+            try:
+                pedidos = listar_pedidos(filtro_cliente=filtro, estado=estado)
+                with open(ruta, "w", newline="", encoding="utf-8-sig") as f:
+                    writer = csv.writer(f)
+                    writer.writerow(["# Pedido", "Cliente", "Teléfono", "Total ($)", "Estado", "Fecha", "Cant. Ítems"])
+                    for h in pedidos:
+                        writer.writerow([
+                            h["id"],
+                            h["cliente_nombre"],
+                            h["cliente_telefono"] or "",
+                            f"{h['total']:.2f}",
+                            h["estado"],
+                            h["fecha"],
+                            h.get("items", 0),
+                        ])
+                self.after(0, lambda: messagebox.showinfo(
+                    "Exportación Exitosa", f"Se exportaron {len(pedidos)} pedidos a:\n{ruta}"
+                ))
+            except Exception as e:
+                self.after(0, lambda: messagebox.showerror(
+                    "Error de Exportación", f"No se pudo exportar los pedidos: {e}"
+                ))
+
+        threading.Thread(target=_bg, daemon=True).start()
 
     def _programar_refresh(self):
         self.after(REFRESH_MS, self._refresh_periodico)

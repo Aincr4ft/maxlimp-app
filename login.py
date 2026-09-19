@@ -1,5 +1,4 @@
 import customtkinter as ctk
-from cifrado import cifrar_contrasena
 from sesion import Sesion
 from base_de_datos.connection import inicializar_bd
 from base_de_datos.queries import autenticar_usuario
@@ -51,8 +50,7 @@ class LoginApp(ctk.CTk):
             self.lbl_error.configure(text="Completa todos los campos.")
             return
 
-        hash_input = cifrar_contrasena(contrasena)
-        resultado = autenticar_usuario(usuario, hash_input)
+        resultado = autenticar_usuario(usuario, contrasena)
 
         if resultado:
             Sesion.crear(resultado["id"], resultado["nombre"], resultado["rol"])
