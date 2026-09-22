@@ -18,6 +18,7 @@ def obtener_pool():
                 pool_name="maxlimp_pool",
                 pool_size=10,
                 pool_reset_session=True,
+                autocommit=True,
                 host=os.getenv("DB_HOST"),
                 port=int(os.getenv("DB_PORT", 3306)),
                 user=os.getenv("DB_USER"),
@@ -55,6 +56,7 @@ def obtener_conexion():
             password=os.getenv("DB_PASSWORD"),
             database=os.getenv("DB_NAME"),
             connection_timeout=15,
+            autocommit=True,
         )
     except Exception as e:
         print(f"Error de conexión a la base de datos: {e}")
