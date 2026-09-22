@@ -1,10 +1,15 @@
+import os
 import customtkinter as ctk
+from PIL import Image
 from sesion import Sesion
 from base_de_datos.connection import inicializar_bd
 from base_de_datos.queries import autenticar_usuario
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("green")
+
+ASSETS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
+LOGO_FULL_PATH = os.path.join(ASSETS_DIR, "logo_full.png")
 
 
 class LoginApp(ctk.CTk):
@@ -13,13 +18,21 @@ class LoginApp(ctk.CTk):
         super().__init__()
         inicializar_bd()  # crea tablas, trigger y datos iniciales si no existen
         self.title("MAX LIMP - Iniciar Sesión")
-        self.geometry('450x520')
+        self.geometry('450x560')
         self.resizable(False, False)
         self._construir_interfaz()
 
     def _construir_interfaz(self):
-        ctk.CTkLabel(self, text="MAX LIMP", font=("Arial", 32, "bold")).pack(pady=(40, 5))
-        ctk.CTkLabel(self, text="Panel de Inventario y Pedidos", font=("Arial", 14)).pack(pady=(0, 30))
+        if os.path.exists(LOGO_FULL_PATH):
+            logo_pil = Image.open(LOGO_FULL_PATH)
+            ancho = 260
+            alto = int(logo_pil.height * (ancho / logo_pil.width))
+            self._logo_img = ctk.CTkImage(logo_pil, size=(ancho, alto))
+            ctk.CTkLabel(self, image=self._logo_img, text="").pack(pady=(30, 5))
+        else:
+            ctk.CTkLabel(self, text="MAX LIMP", font=("Arial", 32, "bold")).pack(pady=(40, 5))
+
+        ctk.CTkLabel(self, text="Panel de Inventario y Pedidos", font=("Arial", 14)).pack(pady=(0, 25))
 
         ctk.CTkLabel(self, text="Usuario:", anchor="w").pack(fill="x", padx=60)
         self.entry_usuario = ctk.CTkEntry(self, placeholder_text="Ingresa tu usuario", width=330)

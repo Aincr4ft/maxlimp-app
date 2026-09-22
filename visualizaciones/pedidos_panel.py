@@ -1,5 +1,7 @@
+import os
 import threading
 import customtkinter as ctk
+from PIL import Image
 from collections import deque
 from sesion import Sesion
 from base_de_datos.queries import (
@@ -7,6 +9,10 @@ from base_de_datos.queries import (
     buscar_cliente_por_telefono, crear_o_actualizar_cliente,
 )
 from visualizaciones._widgets import mostrar_detalle_pedido
+
+ASSETS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets")
+LOGO_ICON_PATH = os.path.join(ASSETS_DIR, "logo_icon.png")
+
 
 # ── PALETA (verde, línea de productos de limpieza) ─────────────────────────────
 C_BG      = "#0a120e"
@@ -49,10 +55,14 @@ class VentanaVendedor(ctk.CTk):
         header.pack(fill="x")
         header.pack_propagate(False)
 
-        logo_frame = ctk.CTkFrame(header, fg_color=C_ACCENT, corner_radius=8, width=36, height=36)
-        logo_frame.pack(side="left", padx=(18, 10), pady=13)
-        logo_frame.pack_propagate(False)
-        ctk.CTkLabel(logo_frame, text="M", font=("Trebuchet MS", 18, "bold"), text_color="white").place(relx=.5, rely=.5, anchor="center")
+        if os.path.exists(LOGO_ICON_PATH):
+            self._logo_img = ctk.CTkImage(Image.open(LOGO_ICON_PATH), size=(36, 36))
+            ctk.CTkLabel(header, image=self._logo_img, text="").pack(side="left", padx=(18, 10), pady=13)
+        else:
+            logo_frame = ctk.CTkFrame(header, fg_color=C_ACCENT, corner_radius=8, width=36, height=36)
+            logo_frame.pack(side="left", padx=(18, 10), pady=13)
+            logo_frame.pack_propagate(False)
+            ctk.CTkLabel(logo_frame, text="M", font=("Trebuchet MS", 18, "bold"), text_color="white").place(relx=.5, rely=.5, anchor="center")
 
         ctk.CTkLabel(header, text="MAX LIMP", font=FONT_TITLE, text_color=C_TEXT).pack(side="left")
         ctk.CTkLabel(header, text=" / Registrar pedido", font=FONT_BODY, text_color=C_MUTED).pack(side="left", pady=4)
