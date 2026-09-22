@@ -302,7 +302,7 @@ class VentanaAdmin(ctk.CTk):
                 text_color = C_RED if (col_i == 4 and p["stock"] < 5) else C_TEXT
                 ctk.CTkLabel(self.frame_prod_tabla, text=val, width=list(self.cols_prod.values())[col_i],
                              anchor="w", fg_color=color, font=FONT_SMALL, text_color=text_color,
-                             wraplength=220 if col_i == 1 else None).grid(row=fila, column=col_i, padx=5, pady=3)
+                             wraplength=220 if col_i == 1 else 0).grid(row=fila, column=col_i, padx=5, pady=3)
             act_txt = "Sí" if p["activo"] else "No"
             act_color = C_GREEN if p["activo"] else C_MUTED
             ctk.CTkLabel(self.frame_prod_tabla, text=act_txt, width=self.cols_prod["Activo"],
@@ -522,7 +522,7 @@ class VentanaAdmin(ctk.CTk):
             for col_i, val in enumerate(vals):
                 ctk.CTkLabel(self.frame_ped_tabla, text=val, width=list(self.cols_ped.values())[col_i],
                              anchor="w", fg_color=color, font=FONT_SMALL, text_color=C_TEXT,
-                             wraplength=170 if col_i == 1 else None).grid(row=fila, column=col_i, padx=5, pady=3)
+                             wraplength=170 if col_i == 1 else 0).grid(row=fila, column=col_i, padx=5, pady=3)
             ctk.CTkLabel(self.frame_ped_tabla, text=h["estado"], width=self.cols_ped["Estado"],
                          anchor="w", fg_color=color, font=FONT_SMALL, text_color=estado_color).grid(
                 row=fila, column=4, padx=5, pady=3)
@@ -627,7 +627,7 @@ class VentanaAdmin(ctk.CTk):
             for col_i, val in enumerate(vals):
                 ctk.CTkLabel(self.frame_cli_tabla, text=val, width=list(self.cols_cli.values())[col_i],
                              anchor="w", fg_color=color, font=FONT_SMALL, text_color=C_TEXT,
-                             wraplength=260 if col_i == 3 else None).grid(row=fila, column=col_i, padx=5, pady=4)
+                             wraplength=260 if col_i == 3 else 0).grid(row=fila, column=col_i, padx=5, pady=4)
 
     # ── TAB USUARIOS (staff del panel) ───────────────────────────────────────
 
