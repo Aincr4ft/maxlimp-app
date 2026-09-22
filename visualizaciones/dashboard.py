@@ -157,7 +157,10 @@ class VentanaAdmin(ctk.CTk):
         self.frame_graficos.pack(fill="both", expand=True)
         self.frame_graficos.grid_columnconfigure(0, weight=1)
         self.frame_graficos.grid_columnconfigure(1, weight=1)
-        self._render_graficos()
+        # No se llama a _render_graficos() aquí: _mostrar_tab_resumen() ya lo hace
+        # justo después en el arranque, y llamarlo dos veces seguidas provocaba
+        # una condición de carrera (el hilo de la primera llamada terminaba
+        # dibujando sobre tarjetas ya destruidas por la segunda).
 
     def _render_graficos(self):
         for w in self.frame_graficos.winfo_children():
@@ -176,6 +179,8 @@ class VentanaAdmin(ctk.CTk):
             self.after(0, lambda: _dibujar(ventas7, cats))
 
         def _dibujar(ventas7, cats):
+            if not (card1.winfo_exists() and card2.winfo_exists()):
+                return  # el usuario cambió de pestaña antes de que terminara la consulta
             if ventas7:
                 w1 = crear_grafico_ventas(card1, ventas7)
                 w1.pack(padx=10, pady=10, fill="both", expand=True)
