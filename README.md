@@ -42,15 +42,25 @@ de WhatsApp vía n8n).
 
 ```bash
 python -m venv venv
-# Windows: venv\Scripts\activate
+# Windows (PowerShell): .\venv\Scripts\Activate.ps1
 # Linux/Mac: source venv/bin/activate
 pip install -r requisitos.txt
 
-cp .env.example .env
-# edita .env con tus credenciales de Railway (ver instrucciones dentro del archivo)
+# Copia el .env de ejemplo y edítalo con tus credenciales de Railway
+# Windows (PowerShell): Copy-Item .env.example .env
+# Linux/Mac: cp .env.example .env
 
 python main.py
 ```
+
+Si la app no inicia sesión, ejecuta primero el diagnóstico de conexión:
+
+```bash
+python verificar_conexion.py
+```
+
+Muestra si el `.env` está completo, si el servidor MySQL responde y qué
+tablas/triggers existen, sin crear ni modificar nada.
 
 Usuarios de demo (se crean solos la primera vez que corres la app):
 

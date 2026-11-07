@@ -3,7 +3,10 @@ import hmac
 import os
 import secrets
 
-ITERACIONES = 100_000
+# OWASP recomienda 600.000 iteraciones para PBKDF2-HMAC-SHA256.
+# Los hashes ya guardados conservan sus propias iteraciones, así que subir
+# este valor NO invalida las contraseñas existentes.
+ITERACIONES = 600_000
 
 
 def cifrar_contrasena(password: str) -> str:

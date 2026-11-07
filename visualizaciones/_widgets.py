@@ -103,7 +103,17 @@ def abrir_ventana_ticket(parent, detalle: dict) -> None:
 
 def mostrar_detalle_pedido(parent, pedido_id: int) -> None:
     """Abre un CTkToplevel con el detalle del pedido. Si no existe, muestra error."""
-    detalle = obtener_detalle_pedido(pedido_id)
+    try:
+        detalle = obtener_detalle_pedido(pedido_id)
+    except Exception as e:
+        v = ctk.CTkToplevel(parent)
+        v.title("Error")
+        v.geometry("420x150")
+        v.grab_set()
+        ctk.CTkLabel(v, text=f"No se pudo cargar el pedido #{pedido_id}:\n{e}",
+                     text_color="#e74c3c", font=("Arial", 12),
+                     wraplength=380, justify="left").pack(expand=True, padx=20, pady=20)
+        return
     if not detalle:
         v = ctk.CTkToplevel(parent)
         v.title("Error")

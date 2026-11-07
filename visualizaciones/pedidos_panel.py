@@ -43,6 +43,8 @@ class VentanaVendedor(ctk.CTk):
         self.geometry("1180x720")
         self.minsize(950, 620)
         self.configure(fg_color=C_BG)
+        # main.py lee este atributo para saber si debe volver al login o salir.
+        self.cerrar_sesion = False
         self.carrito: dict = {}
         self.cliente_actual: dict = None
         self._construir_interfaz()
@@ -189,7 +191,12 @@ class VentanaVendedor(ctk.CTk):
         if not telefono:
             self.lbl_cliente.configure(text="Ingresa un teléfono.", text_color=C_RED)
             return
-        cliente = buscar_cliente_por_telefono(telefono)
+        try:
+            cliente = buscar_cliente_por_telefono(telefono)
+        except Exception as e:
+            self.lbl_cliente.configure(
+                text=f"⚠ No se pudo buscar el cliente: {e}", text_color=C_RED)
+            return
         if cliente:
             self.cliente_actual = cliente
             self.lbl_cliente.configure(
@@ -235,24 +242,33 @@ class VentanaVendedor(ctk.CTk):
     # ── CATÁLOGO ──────────────────────────────────────────────────────────────
 
     def _cargar_catalogo(self):
-        self.lbl_cargando.configure(text="⏳ Cargando...")
+        self.lbl_cargando.configure(text="⏳ Cargando...", text_color=C_MUTED)
         threading.Thread(target=self._cargar_catalogo_bg, args=(None,), daemon=True).start()
 
     def _buscar(self):
         filtro = self.entry_buscar.get().strip() or None
-        self.lbl_cargando.configure(text="⏳ Buscando...")
+        self.lbl_cargando.configure(text="⏳ Buscando...", text_color=C_MUTED)
         threading.Thread(target=self._cargar_catalogo_bg, args=(filtro,), daemon=True).start()
 
     def _cargar_catalogo_bg(self, filtro):
-        productos = listar_productos(filtro=filtro, solo_activos=True)
+        try:
+            productos = listar_productos(filtro=filtro, solo_activos=True)
+        except Exception as e:
+            self.after(0, lambda: self.lbl_cargando.configure(
+                text=f"❌ No se pudo cargar el catálogo: {e}", text_color=C_RED))
+            return
         self.after(0, lambda: self._renderizar_catalogo(productos))
 
     def _renderizar_catalogo(self, productos):
-        self.lbl_cargando.configure(text="")
-        # CTkScrollableFrame almacena los widgets reales en ._scrollable_frame
-        inner_cat = getattr(self.frame_catalogo, "_scrollable_frame", self.frame_catalogo)
-        for w in list(inner_cat.winfo_children())[len(self.cols_cat):]:
+        self.lbl_cargando.configure(text="", text_color=C_MUTED)
+        # En customtkinter 5.2 el propio CTkScrollableFrame ES el frame interno
+        # (no existe ._scrollable_frame): se limpia completo y se repinta el encabezado.
+        for w in self.frame_catalogo.winfo_children():
             w.destroy()
+        for col_i, (enc, ancho) in enumerate(self.cols_cat.items()):
+            ctk.CTkLabel(self.frame_catalogo, text=enc, font=FONT_SMALL,
+                         width=ancho, anchor="w", text_color=C_MUTED).grid(
+                row=0, column=col_i, padx=5, pady=7)
 
         if not productos:
             ctk.CTkLabel(self.frame_catalogo, text="Sin productos.",
@@ -290,8 +306,7 @@ class VentanaVendedor(ctk.CTk):
         self._refrescar_carrito()
 
     def _refrescar_carrito(self):
-        inner_cart = getattr(self.frame_carrito, "_scrollable_frame", self.frame_carrito)
-        for w in inner_cart.winfo_children():
+        for w in self.frame_carrito.winfo_children():
             w.destroy()
 
         total = 0.0
@@ -344,7 +359,11 @@ class VentanaVendedor(ctk.CTk):
 
     def _confirmar_pedido_bg(self):
         try:
-            resultado = crear_pedido(self.cliente_actual["id"], self.carrito)
+            # Copia del carrito: la UI puede seguir modificándolo mientras se
+            # procesa el pedido (antes podía lanzar "dictionary changed size").
+            carrito = dict(self.carrito)
+            cliente_id = self.cliente_actual["id"]
+            resultado = crear_pedido(cliente_id, carrito)
             self.after(0, lambda: self._pedido_exitoso(resultado))
         except (ValueError, ConnectionError) as e:
             self.after(0, lambda: self.lbl_msg.configure(text=f"⚠ {e}", text_color=C_RED))
@@ -450,7 +469,11 @@ class VentanaVendedor(ctk.CTk):
             lbl_carg.configure(text="⏳ Cargando...")
             _enc()
             def _bg():
-                pedidos = listar_pedidos(filtro_cliente=filtro_cli, fecha_desde=desde, fecha_hasta=hasta)
+                try:
+                    pedidos = listar_pedidos(filtro_cliente=filtro_cli, fecha_desde=desde, fecha_hasta=hasta)
+                except Exception as e:
+                    v.after(0, lambda: lbl_carg.configure(text=f"❌ {e}", text_color=C_RED))
+                    return
                 v.after(0, lambda: _render(pedidos))
             threading.Thread(target=_bg, daemon=True).start()
 
@@ -460,9 +483,9 @@ class VentanaVendedor(ctk.CTk):
 
     def _cerrar_sesion(self):
         Sesion.cerrar()
-        self.destroy()
-        from login import LoginApp
-        LoginApp().mainloop()
+        self.cerrar_sesion = True
+        # main.py destruye esta ventana y vuelve a abrir el login.
+        self.quit()
 
 
 if __name__ == '__main__':

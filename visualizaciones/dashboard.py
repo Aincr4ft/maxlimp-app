@@ -54,6 +54,8 @@ class VentanaAdmin(ctk.CTk):
         self.title(f"MAX LIMP  ·  Panel Admin  —  {sesion.nombre}")
         self.geometry("1240x780")
         self.configure(fg_color=C_BG)
+        # main.py lee este atributo para saber si debe volver al login o salir.
+        self.cerrar_sesion = False
         self._construir_interfaz()
         self._actualizar_metricas()
         self._cargar_productos()
@@ -183,9 +185,19 @@ class VentanaAdmin(ctk.CTk):
         card2.grid(row=0, column=1, sticky="nsew", padx=(8, 0), pady=4)
 
         def _bg():
-            ventas7 = estadisticas_ventas_7_dias()
-            cats = estadisticas_por_categoria()
+            try:
+                ventas7 = estadisticas_ventas_7_dias()
+                cats = estadisticas_por_categoria()
+            except Exception as e:
+                self.after(0, lambda: _error(e))
+                return
             self.after(0, lambda: _dibujar(ventas7, cats))
+
+        def _error(e):
+            if card1.winfo_exists():
+                ctk.CTkLabel(card1, text=f"⚠ No se pudieron cargar los gráficos:\n{e}",
+                             text_color=C_RED, font=FONT_SMALL, wraplength=380,
+                             justify="left").pack(expand=True, pady=40)
 
         def _dibujar(ventas7, cats):
             if not (card1.winfo_exists() and card2.winfo_exists()):
@@ -267,11 +279,9 @@ class VentanaAdmin(ctk.CTk):
         self._render_prod_encabezado()
 
     def _render_prod_encabezado(self):
-        # CTkScrollableFrame wraps widgets inside ._scrollable_frame internamente.
-        # winfo_children() en el frame externo sólo devuelve el canvas/scrollbar
-        # de la infraestructura de CTk, NO nuestras filas. Hay que limpiar el frame interno.
-        inner = getattr(self.frame_prod_tabla, "_scrollable_frame", self.frame_prod_tabla)
-        for w in inner.winfo_children():
+        # En customtkinter 5.2 el propio CTkScrollableFrame ES el frame interno
+        # (no existe ._scrollable_frame): sus hijos son las filas de la tabla.
+        for w in self.frame_prod_tabla.winfo_children():
             w.destroy()
         for col_i, (enc, ancho) in enumerate(self.cols_prod.items()):
             ctk.CTkLabel(self.frame_prod_tabla, text=enc, font=FONT_SMALL,
@@ -285,12 +295,12 @@ class VentanaAdmin(ctk.CTk):
         self._cargar_productos()
 
     def _cargar_productos(self):
-        self.prod_lbl_cargando.configure(text="⏳ Cargando productos...")
+        self.prod_lbl_cargando.configure(text="⏳ Cargando productos...", text_color=C_MUTED)
         threading.Thread(target=self._cargar_productos_bg, args=(None,), daemon=True).start()
 
     def _buscar_productos(self):
         filtro = self.prod_entry_buscar.get().strip() or None
-        self.prod_lbl_cargando.configure(text="⏳ Buscando...")
+        self.prod_lbl_cargando.configure(text="⏳ Buscando...", text_color=C_MUTED)
         threading.Thread(target=self._cargar_productos_bg, args=(filtro,), daemon=True).start()
 
     def _cargar_productos_bg(self, filtro):
@@ -303,7 +313,7 @@ class VentanaAdmin(ctk.CTk):
             ))
 
     def _render_productos(self, productos):
-        self.prod_lbl_cargando.configure(text="")
+        self.prod_lbl_cargando.configure(text="", text_color=C_MUTED)
         self._render_prod_encabezado()
         if not productos:
             ctk.CTkLabel(self.frame_prod_tabla, text="Sin productos.",
@@ -396,7 +406,7 @@ class VentanaAdmin(ctk.CTk):
         e_stock = ctk.CTkEntry(v, width=310, height=34, corner_radius=8,
                                fg_color=C_CARD, border_color=C_BORDER, font=FONT_BODY)
         e_stock.pack(pady=(0, 8))
-        ctk.CTkLabel(v, text="(Para reponer, súmale a la cantidad actual)",
+        ctk.CTkLabel(v, text="(Escribe el stock final; no se suma al actual)",
                      font=("Trebuchet MS", 10), text_color=C_MUTED).pack()
         lbl = ctk.CTkLabel(v, text="", text_color=C_RED, font=FONT_SMALL)
         lbl.pack()
@@ -486,8 +496,7 @@ class VentanaAdmin(ctk.CTk):
         self._render_ped_encabezado()
 
     def _render_ped_encabezado(self):
-        inner = getattr(self.frame_ped_tabla, "_scrollable_frame", self.frame_ped_tabla)
-        for w in inner.winfo_children():
+        for w in self.frame_ped_tabla.winfo_children():
             w.destroy()
         for col_i, (enc, ancho) in enumerate(self.cols_ped.items()):
             ctk.CTkLabel(self.frame_ped_tabla, text=enc, font=FONT_SMALL,
@@ -501,14 +510,14 @@ class VentanaAdmin(ctk.CTk):
         self._cargar_pedidos()
 
     def _cargar_pedidos(self):
-        self.ped_lbl_cargando.configure(text="⏳ Cargando pedidos...")
+        self.ped_lbl_cargando.configure(text="⏳ Cargando pedidos...", text_color=C_MUTED)
         threading.Thread(target=self._cargar_pedidos_bg, args=(None, None), daemon=True).start()
 
     def _buscar_pedidos(self):
         filtro = self.ped_entry_cliente.get().strip() or None
         estado = self.ped_estado_var.get()
         estado = None if estado == "Todos" else estado
-        self.ped_lbl_cargando.configure(text="⏳ Buscando...")
+        self.ped_lbl_cargando.configure(text="⏳ Buscando...", text_color=C_MUTED)
         threading.Thread(target=self._cargar_pedidos_bg, args=(filtro, estado), daemon=True).start()
 
     def _cargar_pedidos_bg(self, filtro, estado):
@@ -521,7 +530,7 @@ class VentanaAdmin(ctk.CTk):
             ))
 
     def _render_pedidos(self, pedidos):
-        self.ped_lbl_cargando.configure(text="")
+        self.ped_lbl_cargando.configure(text="", text_color=C_MUTED)
         self._render_ped_encabezado()
         if not pedidos:
             ctk.CTkLabel(self.frame_ped_tabla, text="Sin pedidos.",
@@ -596,6 +605,10 @@ class VentanaAdmin(ctk.CTk):
                       fg_color=C_SURFACE, hover_color=C_BORDER, font=FONT_SMALL,
                       command=self._cargar_clientes).pack(side="left", padx=4)
 
+        self.cli_lbl_estado = ctk.CTkLabel(self.tab_clientes, text="", text_color=C_MUTED,
+                                           font=FONT_SMALL, wraplength=700, justify="left")
+        self.cli_lbl_estado.pack(anchor="w")
+
         self.frame_cli_tabla = ctk.CTkScrollableFrame(self.tab_clientes, fg_color=C_CARD, corner_radius=12,
                                                        border_width=1, border_color=C_BORDER)
         self.frame_cli_tabla.pack(fill="both", expand=True, pady=(4, 0))
@@ -604,8 +617,7 @@ class VentanaAdmin(ctk.CTk):
         self._render_cli_encabezado()
 
     def _render_cli_encabezado(self):
-        inner = getattr(self.frame_cli_tabla, "_scrollable_frame", self.frame_cli_tabla)
-        for w in inner.winfo_children():
+        for w in self.frame_cli_tabla.winfo_children():
             w.destroy()
         for col_i, (enc, ancho) in enumerate(self.cols_cli.items()):
             ctk.CTkLabel(self.frame_cli_tabla, text=enc, font=FONT_SMALL,
@@ -619,17 +631,29 @@ class VentanaAdmin(ctk.CTk):
         self._cargar_clientes()
 
     def _cargar_clientes(self):
+        self.cli_lbl_estado.configure(text="⏳ Cargando clientes...", text_color=C_MUTED)
         threading.Thread(target=self._cargar_clientes_bg, args=(None,), daemon=True).start()
 
     def _buscar_clientes(self):
         filtro = self.cli_entry_buscar.get().strip() or None
+        self.cli_lbl_estado.configure(text="⏳ Buscando...", text_color=C_MUTED)
         threading.Thread(target=self._cargar_clientes_bg, args=(filtro,), daemon=True).start()
 
     def _cargar_clientes_bg(self, filtro):
-        clientes = listar_clientes(filtro=filtro)
+        try:
+            clientes = listar_clientes(filtro=filtro)
+        except Exception as e:
+            self.after(0, lambda: self._error_clientes(e))
+            return
         self.after(0, lambda: self._render_clientes(clientes))
 
+    def _error_clientes(self, e):
+        self.cli_lbl_estado.configure(
+            text=f"❌ No se pudieron cargar los clientes: {e}", text_color=C_RED)
+        self._render_cli_encabezado()
+
     def _render_clientes(self, clientes):
+        self.cli_lbl_estado.configure(text="")
         self._render_cli_encabezado()
         if not clientes:
             ctk.CTkLabel(self.frame_cli_tabla, text="Sin clientes registrados todavía.",
@@ -672,8 +696,7 @@ class VentanaAdmin(ctk.CTk):
         self._render_usr_encabezado()
 
     def _render_usr_encabezado(self):
-        inner = getattr(self.frame_usr_tabla, "_scrollable_frame", self.frame_usr_tabla)
-        for w in inner.winfo_children():
+        for w in self.frame_usr_tabla.winfo_children():
             w.destroy()
         for col_i, (enc, ancho) in enumerate(self.cols_usr.items()):
             ctk.CTkLabel(self.frame_usr_tabla, text=enc, font=FONT_SMALL,
@@ -688,7 +711,14 @@ class VentanaAdmin(ctk.CTk):
 
     def _cargar_usuarios_tabla(self):
         self._render_usr_encabezado()
-        usuarios = listar_usuarios()
+        try:
+            usuarios = listar_usuarios()
+        except Exception as e:
+            ctk.CTkLabel(self.frame_usr_tabla,
+                         text=f"❌ No se pudieron cargar los usuarios: {e}",
+                         text_color=C_RED, font=FONT_SMALL, wraplength=700).grid(
+                row=1, column=0, columnspan=4, pady=20)
+            return
         if not usuarios:
             ctk.CTkLabel(self.frame_usr_tabla, text="Sin usuarios.",
                          text_color=C_MUTED).grid(row=1, column=0, columnspan=4, pady=20)
@@ -767,7 +797,7 @@ class VentanaAdmin(ctk.CTk):
                 self._form_usuario(f"✏️  Editar Usuario #{uid}",
                     defaults={"Nombre completo": u["nombre"], "Nombre de usuario": u["usuario"], "Rol": u["rol"]},
                     on_guardar=on_guardar)
-            except ValueError as e:
+            except Exception as e:
                 lbl.configure(text=str(e))
         ctk.CTkButton(v, text="Continuar", width=290, height=36, corner_radius=8,
                       fg_color=C_ACCENT, hover_color="#0d9668", font=FONT_BODY,
@@ -801,8 +831,17 @@ class VentanaAdmin(ctk.CTk):
         threading.Thread(target=self._actualizar_metricas_bg, daemon=True).start()
 
     def _actualizar_metricas_bg(self):
-        resumen = resumen_negocio()
+        try:
+            resumen = resumen_negocio()
+        except Exception as e:
+            self.after(0, lambda: self._metricas_error(e))
+            return
         self.after(0, lambda: self._pintar_metricas(resumen))
+
+    def _metricas_error(self, e):
+        for lbl in self.metricas_labels.values():
+            lbl.configure(text="—")
+        print(f"No se pudieron actualizar las métricas: {e}")
 
     def _pintar_metricas(self, r):
         self.metricas_labels["Ingresos"].configure(text=f"${r['ingresos']:,.2f}")
@@ -912,9 +951,9 @@ class VentanaAdmin(ctk.CTk):
 
     def _cerrar_sesion(self):
         Sesion.cerrar()
-        self.destroy()
-        from login import LoginApp
-        LoginApp().mainloop()
+        self.cerrar_sesion = True
+        # main.py destruye esta ventana y vuelve a abrir el login.
+        self.quit()
 
 
 if __name__ == '__main__':

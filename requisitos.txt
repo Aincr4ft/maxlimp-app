@@ -2,7 +2,13 @@ customtkinter>=5.2.0
 mysql-connector-python>=8.0.0
 python-dotenv>=1.0.0
 matplotlib>=3.7.0
+pillow>=10.0.0
 
 # Para generar el ejecutable:
 #   pip install pyinstaller
-#   pyinstaller --onefile --windowed --collect-all customtkinter main.py
+#   pyinstaller --onefile --windowed --collect-all customtkinter --add-data "assets;assets" main.py
+#
+# IMPORTANTE:
+#   - --add-data incluye el logo; sin eso el .exe arranca sin imágenes.
+#   - Copia el archivo .env junto al .exe (dist/.env): la app lo busca ahí
+#     cuando está empaquetada, para que puedas cambiar credenciales sin recompilar.
